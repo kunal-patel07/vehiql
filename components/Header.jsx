@@ -4,9 +4,12 @@ import Link from "next/link";
 import React from "react";
 import { Button } from "./ui/button";
 import { ArrowLeft, CarFront, Heart, Layout } from "lucide-react";
+import { checkUser } from "@/lib/checkUser";
 
 const Header = async ({ isAdminPage = false }) => {
-  const isAdmin = false;
+
+  const user  = await checkUser();
+  const isAdmin = user?.role === "ADMIN";
   return (
     <header className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b">
       <nav className="mx-auto px-4 py-4 flex items-center justify-between">
@@ -25,7 +28,7 @@ const Header = async ({ isAdminPage = false }) => {
 
         <div className="flex items-center space-x-4">
           {isAdminPage ? (
-           <Link href="/s">
+           <Link href="/">
                 <Button variant="outline" className="flex items-center gap-2">
                   <ArrowLeft size={18} />
 

@@ -34,7 +34,7 @@ export default function Home() {
 
       <section className="py-12">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-8">  
             <h2 className="text-2xl font-bold ">Featured Cars</h2>
             <Button variant="ghost" className="flex items-center" asChild>
               <Link href="/cars">
@@ -103,7 +103,6 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold mb-2 ">Wide Selection </h3>
               <p className="text-gray-600">
-                {" "}
                 Thousands of verified vehicles from trusted dealerships and
                 private sellers
               </p>

@@ -1,9 +1,12 @@
+"use server";
+
 import { db } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { v4 as uuidv4 } from "uuid";
 
 async function fileToBase64(file) {
   const bytes = await file.arrayBuffer();
@@ -17,9 +20,8 @@ export async function processCarImageWithAI(file) {
       throw new Error("Gemini API key is not configured");
     }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const base64Image = await fileToBase64(file);
+    const model = genAI.getGenerativeModel({model : "gemini-3-flash-preview"} );
+     const base64Image = await fileToBase64(file);
 
     const imagePart = {
       inlineData: {
@@ -109,7 +111,7 @@ export async function addCar({ carData, images }) {
     if (!userId) throw new Error("Unauthorized");
 
     const user = await db.user.findUnique({
-      where: { clearkUserId: userId },
+      where: { clerkUserId: userId },
     });
 
     if (!user) throw new Error("User not found");

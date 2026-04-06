@@ -4,7 +4,7 @@ const CarPage = async({params}) => {
     const  {id} = await params; 
   return (
     <div>
-      CarPage : {id}
+      dsds
     </div>
   )
 }

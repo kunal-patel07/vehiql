@@ -1,12 +1,15 @@
 "use server";
 
+import { serializeCarData } from "@/lib/helper";
 import { db } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { da, se } from "date-fns/locale";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { v4 as uuidv4 } from "uuid";
+import { success } from "zod";
 
 async function fileToBase64(file) {
   const bytes = await file.arrayBuffer();
@@ -20,8 +23,8 @@ export async function processCarImageWithAI(file) {
       throw new Error("Gemini API key is not configured");
     }
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({model : "gemini-3-flash-preview"} );
-     const base64Image = await fileToBase64(file);
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const base64Image = await fileToBase64(file);
 
     const imagePart = {
       inlineData: {
@@ -197,7 +200,152 @@ export async function addCar({ carData, images }) {
       success: true,
     };
   } catch (error) {
-
-    throw new Error("Error adding car" + error.message)
+    throw new Error("Error adding car" + error.message);
   }
 }
+
+export async function getCars(search = "") {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+
+    if (!user) throw new Error("User not found");
+
+    let where = {};
+
+    if (search) {
+      where.OR = [
+        { make: { contains: search, mode: "insensitive" } },
+        { model: { contains: search, mode: "insensitive" } },
+        { color: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const cars = await db.car.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
+
+    const serializedCars = cars.map(serializeCarData);
+
+    return {
+      success: true,
+      data: serializedCars,
+    };
+  } catch (error) {
+    console.error("Error fetching cars: " + error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function deleteCar(id) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+
+    if (!user) throw new Error("User not found");
+
+    const car = await db.car.findUnique({
+      where: { id },
+      select: { images: true },
+    });
+
+    if (!car) {
+      return {
+        success: false,
+        error: "Car not found",
+      };
+    }
+
+    await db.car.delete({
+      where: { id },
+    });
+    
+    
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+    const filePaths = car.images
+      .map((imageUrl) => {
+        const url = new URL(imageUrl);
+        const pathMatch = url.pathname.match(/\/car-images\/(.*)/);
+        return pathMatch ? pathMatch[1] : null;
+      })
+      .filter(Boolean);
+
+    if (filePaths.length > 0) {
+      const { error } = await supabase.storage
+        .from("car-images")
+        .remove(filePaths);
+  
+        if(error) {
+          console.error("Error deleting images from Supabase:", error);
+        }
+    }
+
+    revalidatePath("/admin/cars");
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error deleting car: " + error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+export async function updateCarStatus(id , {status , featured}){
+  try {
+     const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+
+    if (!user) throw new Error("User not found");
+
+   const updateData = {};
+
+  if(status !== undefined){
+    updateData.status = status
+  }
+  if(featured !== undefined){
+    updateData.featured = featured      
+  }
+
+  await db.car.update({
+    where : {id},
+    data : updateData
+  })
+
+  revalidatePath("/admin/cars");
+
+  return {
+    success: true,
+  }
+
+  } catch (error) {
+    console.error("Error updating car status: " + error.message);
+
+   return   { 
+   success: false,
+   error: error.message 
+   }
+
+
+  }
+}
+

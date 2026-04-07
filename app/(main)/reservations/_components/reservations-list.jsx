@@ -39,7 +39,7 @@ export function ReservationsList({ initialData }) {
         <p className="text-gray-500 mb-6 max-w-md">
           You don't have any test drive reservations yet. Browse our cars and
           book a test drive to get started.
-        </p>
+        </p>  
         <Button variant="default" asChild>
           <Link href="/cars">Browse Cars</Link>
         </Button>

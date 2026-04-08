@@ -2,7 +2,7 @@ import React from 'react'
 import AddCarForm from '../_components/add-car-form'
 
 export const metadata ={
-    title : "Add new Car | Vehiql Admin",
+    title : "Add new Car | Autonexis Admin",
     descritiption :"Add a new car to the marketplace"
 }
 

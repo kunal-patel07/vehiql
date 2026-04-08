@@ -153,7 +153,7 @@ export function TestDriveCard({
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="w-full"
+                  className="w-full mt-2"
                   onClick={() => setCancelDialogOpen(true)}
                   disabled={isCancelling}
                 >

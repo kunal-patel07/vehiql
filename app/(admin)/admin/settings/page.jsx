@@ -2,7 +2,7 @@ import React from 'react'
 import {SettingsForm} from './_components/settings-form'
 
 export const metadata = {
-    title :"Settings | Vehiql admin",
+    title :"Settings | Autonexis admin",
     description : "Manage delarship working hours and admin users"
 }
 

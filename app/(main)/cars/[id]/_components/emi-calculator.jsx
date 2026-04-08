@@ -114,7 +114,7 @@ function EmiCalculator({ price = 1000 }) {
             </div>
           </div>
 
-          <div c    lassName="bg-white rounded-xl p-4">
+          <div className="bg-white rounded-xl p-4">
             <h2 className="text-lg font-inter font-semibold text-black mb-3">
               Down Payment
             </h2>

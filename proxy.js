@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 const isProtectedRoute = createRouteMatcher([
   "/admin(.*)",
   "/saved-cars(.*)",
-  "/reservation(.*)",
+  "/reservations(.*)",
 ])
 const aj = arcjet({
   key: process.env.ARCJET_KEY,

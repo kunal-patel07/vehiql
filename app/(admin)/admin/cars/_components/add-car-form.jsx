@@ -1,8 +1,8 @@
 "use client";
-import { Toast } from "sonner";
-import { addCar, processCarImageWithAI } from "@/actions/car";
-import React, { use, useEffect, useState } from "react";
-import z, { set } from "zod";
+import { addCar } from "@/actions/car";
+import { useAiExtraction } from "@/context/ai-extraction-context";
+import React, { useCallback, useEffect, useState } from "react";
+import z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,7 +32,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import useFetch from "@/hooks/use-fetch";
 import { useRouter } from "next/navigation";
-import { add } from "date-fns";
 
 // Predefined options
 const fuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "Plug-in Hybrid"];
@@ -48,6 +47,30 @@ const bodyTypes = [
 ];
 const carStatuses = ["AVAILABLE", "UNAVAILABLE", "SOLD"];
 
+// ── Schema defined OUTSIDE the component so it is not recreated on every render
+const carFormSchema = z.object({
+  make: z.string().min(1, "Make is required"),
+  model: z.string().min(1, "Model is required"),
+  year: z.string().refine((val) => {
+    const year = parseInt(val);
+    return (
+      !isNaN(year) && year >= 1900 && year <= new Date().getFullYear() + 1
+    );
+  }, "Valid year required"),
+  price: z.string().min(1, "Price is required"),
+  mileage: z.string().min(1, "Mileage is required"),
+  color: z.string().min(1, "Color is required"),
+  fuelType: z.string().min(1, "Fuel type is required"),
+  transmission: z.string().min(1, "Transmission is required"),
+  bodyType: z.string().min(1, "Body type is required"),
+  seats: z.string().optional(),
+  description: z
+    .string()
+    .min(10, "Description must be at least 10 characters"),
+  status: z.enum(["AVAILABLE", "UNAVAILABLE", "SOLD"]),
+  featured: z.boolean().default(false),
+});
+
 const AddCarForm = () => {
   const router = useRouter();
 
@@ -56,31 +79,6 @@ const AddCarForm = () => {
   const [imageError, setImageError] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadAiImage, setUploadAiImage] = useState(null);
-
-  // Define form schema with Zod
-  const carFormSchema = z.object({
-    make: z.string().min(1, "Make is required"),
-    model: z.string().min(1, "Model is required"),
-    year: z.string().refine((val) => {
-      const year = parseInt(val);
-      return (
-        !isNaN(year) && year >= 1900 && year <= new Date().getFullYear() + 1
-      );
-    }, "Valid year required"),
-    price: z.string().min(1, "Price is required"),
-    mileage: z.string().min(1, "Mileage is required"),
-    color: z.string().min(1, "Color is required"),
-    fuelType: z.string().min(1, "Fuel type is required"),
-    transmission: z.string().min(1, "Transmission is required"),
-    bodyType: z.string().min(1, "Body type is required"),
-    seats: z.string().optional(),
-    description: z
-      .string()
-      .min(10, "Description must be at least 10 characters"),
-    status: z.enum(["AVAILABLE", "UNAVAILABLE", "SOLD"]),
-    featured: z.boolean().default(false),
-    // Images are handled separately
-  });
 
   const {
     register,
@@ -140,55 +138,75 @@ const AddCarForm = () => {
       multiple: false,
     });
 
+  // ── AI Extraction via global context (survives navigation) ──────────────
   const {
-    loading: processImageLoading,
-    fn: processImageFn,
-    data: processImageResult,
-    error: processImageError,
-  } = useFetch(processCarImageWithAI);
+    isProcessing: processImageLoading,
+    startExtraction,
+    registerListener,
+    unregisterListener,
+    claimResult,
+    clearResult,
+  } = useAiExtraction();
 
   const processWithAI = async () => {
     if (!uploadAiImage) {
       toast.error("Please upload an image first");
       return;
     }
-
-    await processImageFn(uploadAiImage);
+    // Kick off in the background provider — won't die if user navigates away
+    startExtraction(uploadAiImage);
   };
 
+  /**
+   * Fill the form fields from an AI result object.
+   * The context already prevents double-delivery, so no clearResult call
+   * is needed here.
+   */
+  const applyAiResult = useCallback(
+    (response, file) => {
+      const carDetails = response.data;
+      setValue("make", carDetails.make || "");
+      setValue("model", carDetails.model || "");
+      setValue("year", carDetails.year ? carDetails.year.toString() : "");
+      setValue("color", carDetails.color || "");
+      setValue("price", carDetails.price ? carDetails.price.toString() : "");
+      setValue("mileage", carDetails.mileage ? carDetails.mileage.toString() : "");
+      setValue("bodyType", carDetails.bodyType || "");
+      setValue("fuelType", carDetails.fuelType || "");
+      setValue("transmission", carDetails.transmission || "");
+      setValue("description", carDetails.description || "");
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setUploadedImages((prev) => [...prev, e.target.result]);
+        };
+        reader.readAsDataURL(file);
+      }
+
+      setActiveTab("manual");
+    },
+    [setValue] // stable — setValue from react-hook-form never changes
+  );
+
+  // ── Register listener + claim any result that arrived while away ──────────
+  // All functions from the context are stable (no deps), so this effect
+  // runs exactly once on mount and cleans up on unmount.
   useEffect(() => {
-    if (processImageError) {
-      toast.error("Failed to upload image: " + processImageError.message);
+    // Wrap in a stable closure so the listener ref always calls the current
+    // applyAiResult without needing to re-register on every render.
+    const handler = (response, file) => applyAiResult(response, file);
+    registerListener(handler);
+
+    // Claim any result that completed while the form was not mounted
+    const { result: pending, imageFile: pendingFile } = claimResult();
+    if (pending?.success) {
+      applyAiResult(pending, pendingFile);
+      clearResult(); // consumed — prevent a remount from applying it again
     }
-  }, [processImageError]);
 
-  useEffect(() => {
-    if (processImageResult?.success) {
-
-      const carDetails = processImageResult.data;
-      setValue("make", carDetails.make);
-      setValue("model", carDetails.model);
-      setValue("year", carDetails.year.toString());
-      setValue("color", carDetails.color);
-      setValue("price", carDetails.price.toString());
-      setValue("mileage", carDetails.mileage.toString());
-      setValue("bodyType", carDetails.bodyType);
-      setValue("fuelType", carDetails.fuelType);
-      setValue("transmission", carDetails.transmission);
-      setValue("description", carDetails.description);
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setUploadedImages((prev) => [...prev, e.target.result]);
-      };
-      reader.readAsDataURL(uploadAiImage);
-      toast.success("successfully extracted car details", {
-        description: `Detected ${carDetails.year} ${carDetails.make} ${carDetails.model} with ${Math.round(carDetails.confidence * 100)}% confidence.`,
-      });
-
-       setActiveTab("manual");
-    }
-  }, [processImageResult, uploadAiImage]);
+    return () => unregisterListener();
+  }, []); // intentionally empty — all deps are stable refs from context
 
   const {
     data: addCarResult,
@@ -196,12 +214,13 @@ const AddCarForm = () => {
     fn: addCarFn,
   } = useFetch(addCar);
 
+  // Only depend on addCarResult — adding addCarLoading caused double-firing
   useEffect(() => {
     if (addCarResult?.success) {
       toast.success("Car added successfully!");
       router.push("/admin/cars");
     }
-  }, [addCarResult, addCarLoading]);
+  }, [addCarResult]);
 
   const onsubmit = async (data) => {
     if (uploadedImages.length === 0) {

@@ -46,7 +46,7 @@ const Header = async ({ isAdminPage = false }) => {
               </Link>
 
               {!isAdmin ? (
-                <Link href="/reservation">
+                <Link href="/reservations">
                   <Button variant="outline">
                     <CarFront size={18} />
 

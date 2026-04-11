@@ -85,7 +85,7 @@ export function CarDetails({ car, testDriveInfo }) {
           url: window.location.href,
         })
         .catch((error) => {
-          console.log("Error sharing", error);
+          console.error("Error sharing", error);
           copyToClipboard();
         });
     } else {

@@ -128,8 +128,7 @@ export async function processImageSearch(file) {
       };
     } catch (parseError) {
       console.error("Failed to parse AI response:", parseError);
-      console.log("Raw response:", text);
-      return {
+       return {
         success: false,
         error: "Failed to parse AI response",
       };
